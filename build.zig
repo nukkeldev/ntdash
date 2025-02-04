@@ -4,19 +4,43 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable(.{ .name = "physics-simulations", .root_source_file = b.path("src/main.zig"), .target = target, .optimize = optimize });
+    // Module
+
+    const exe_mod = b.createModule(.{ .root_source_file = b.path("src/main.zig"), .target = target, .optimize = optimize, .link_libc = true });
+
+    // Dependencies
 
     const sdl_dep = b.dependency("sdl", .{ .target = target, .optimize = optimize });
     const sdl_lib = sdl_dep.artifact("SDL3");
-    exe.root_module.linkLibrary(sdl_lib);
+    exe_mod.linkLibrary(sdl_lib);
 
+    // Exexcutable
+
+    const exe = b.addExecutable(.{
+        .name = "ntdash",
+        .root_module = exe_mod,
+    });
     b.installArtifact(exe);
 
-    const run_exe = b.addRunArtifact(exe);
-    run_exe.step.dependOn(b.getInstallStep());
+    // Run
 
-    const run = b.step("run", "Runs the program.");
-    run.dependOn(&run_exe.step);
+    const run_cmd = b.addRunArtifact(exe);
+    run_cmd.step.dependOn(b.getInstallStep());
 
-    b.default_step = run;
+    // Pass arguments to the executable
+    if (b.args) |args| {
+        run_cmd.addArgs(args);
+    }
+
+    const run_step = b.step("run", "Runs the program");
+    run_step.dependOn(&run_cmd.step);
+
+    b.default_step = run_step;
+
+    // Tests
+
+    const @"test" = b.addTest(.{ .root_module = exe_mod });
+
+    const test_step = b.step("test", "Run tests");
+    test_step.dependOn(&@"test".step);
 }
