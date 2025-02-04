@@ -29,6 +29,7 @@ pub const Context = struct {
         const window: *c.SDL_Window, const renderer: *c.SDL_Renderer = create_window_and_renderer: {
             var window: ?*c.SDL_Window = null;
             var renderer: ?*c.SDL_Renderer = null;
+
             try E(
                 c.SDL_CreateWindowAndRenderer(
                     @ptrCast(title),
@@ -50,7 +51,7 @@ pub const Context = struct {
     // Hints
 
     pub fn setHint(_: *Context, name: []const u8, value: []const u8) void {
-        WM(
+        _ = WM(
             c.SDL_SetHint(@ptrCast(name), @ptrCast(value)),
             "Failed to set hint '{s}' to '{s}'!",
             .{ name, value },
@@ -62,29 +63,21 @@ pub const Context = struct {
     /// Clears the window with a color.
     pub fn clear(self: *Context, color: Color) !void {
         // Set the renderer's draw color
-        if (!c.SDL_SetRenderDrawColor(
+        try E(c.SDL_SetRenderDrawColor(
             self.renderer,
             color.red,
             color.blue,
             color.green,
             color.alpha,
-        )) {
-            log.err("Failed to ", .{});
-        }
+        ), "SetRenderDrawColor");
 
         // Clear the screen with the draw color
-        _ = c.SDL_RenderClear(self.renderer);
+        try E(c.SDL_RenderClear(self.renderer), "RenderClear");
     }
 
     /// Presents the rendered graphics since the last call on the window.
     pub fn present(self: *Context) !void {
-        if (!c.SDL_RenderPresent(self.renderer)) {
-            log.err(
-                "Failed to present rendered graphics to the window! Error: {s}",
-                .{c.SDL_GetError()},
-            );
-            return error.SDLError;
-        }
+        try E(c.SDL_RenderPresent(self.renderer), "RenderPresent");
     }
 
     // Destroy
@@ -115,34 +108,33 @@ pub const Color = packed struct {
 };
 
 pub const Ret = struct {
-    fn _Ret(ret: bool, out: fn (comptime []const u8, anytype) void, comptime msg: []const u8, args: anytype) !void {
+    fn _Ret(
+        ret: bool,
+        out: fn (comptime []const u8, anytype) void,
+        comptime msg: []const u8,
+        args: anytype,
+    ) !void {
         if (!ret) {
             out(msg ++ " SDL Error: {s}", args ++ .{c.SDL_GetError()});
             return error.SDLError;
         }
     }
 
-    pub fn Err(ret: bool, @"fn": []const u8) !void {
-        return _Ret(ret, log.err, "Failed to call '{s}'!", .{@"fn"});
-    }
-
-    pub fn Warn(ret: bool, @"fn": []const u8) void {
-        _ = _Ret(ret, log.warn, "Failed to call '{s}'!", .{@"fn"}) catch {};
-    }
-
     pub fn ErrWithMsg(ret: bool, comptime msg_fmt: []const u8, args: anytype) !void {
         return _Ret(ret, log.err, msg_fmt, args);
     }
 
-    pub fn WarnWithMsg(ret: bool, comptime msg_fmt: []const u8, args: anytype) void {
-        _ = _Ret(ret, log.warn, msg_fmt, args) catch {};
+    pub fn WarnWithMsg(ret: bool, comptime msg_fmt: []const u8, args: anytype) bool {
+        _Ret(ret, log.warn, msg_fmt, args) catch return false;
+        return true;
     }
 
-    // Tests
+    pub fn Err(ret: bool, @"fn": []const u8) !void {
+        return ErrWithMsg(ret, "Failed to call '{s}'!", .{@"fn"});
+    }
 
-    test "expected formatting" {
-        const eql = std.testing.expectEqual;
-        try eql(@typeName(@TypeOf(c.SDL_Init)), "SDL_Init");
+    pub fn Warn(ret: bool, @"fn": []const u8) bool {
+        return WarnWithMsg(ret, "Failed to call '{s}'!", .{@"fn"});
     }
 };
 

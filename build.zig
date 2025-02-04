@@ -6,7 +6,12 @@ pub fn build(b: *std.Build) void {
 
     // Module
 
-    const exe_mod = b.createModule(.{ .root_source_file = b.path("src/main.zig"), .target = target, .optimize = optimize, .link_libc = true });
+    const exe_mod = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
 
     // Dependencies
 
@@ -40,7 +45,8 @@ pub fn build(b: *std.Build) void {
     // Tests
 
     const @"test" = b.addTest(.{ .root_module = exe_mod });
+    const test_cmd = b.addRunArtifact(@"test");
 
     const test_step = b.step("test", "Run tests");
-    test_step.dependOn(&@"test".step);
+    test_step.dependOn(&test_cmd.step);
 }
